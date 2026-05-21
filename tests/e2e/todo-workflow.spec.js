@@ -48,7 +48,7 @@ test.describe('TODO critical workflows', () => {
     await expect(page.getByText('Task deleted successfully')).toBeVisible();
     await expect(page.locator('.task-card').filter({ hasText: taskTitle })).toHaveCount(0);
 
-    await todoPage.reload();
+    await page.reload();
     await expect(page.getByRole('heading', { name: 'Task Tracker' })).toBeVisible();
     await expect(page.locator('.task-card').filter({ hasText: taskTitle })).toHaveCount(0);
   });
@@ -57,9 +57,12 @@ test.describe('TODO critical workflows', () => {
     const todoPage = new TodoPage(page);
 
     await todoPage.goto();
+    await expect(page.getByRole('heading', { name: 'Incomplete' })).toBeVisible();
+    const initialTaskCount = await page.locator('.task-card').count();
     await todoPage.clickAddTask();
 
     await expect(page.getByText('Task title is required')).toBeVisible();
+    await expect(page.locator('.task-card')).toHaveCount(initialTaskCount);
   });
 
   test('shows overdue status for a past-due task', async ({ page }) => {
@@ -75,7 +78,7 @@ test.describe('TODO critical workflows', () => {
 
     const taskCard = todoPage.getTaskCard('Incomplete', taskTitle);
     await expect(taskCard).toBeVisible();
-    await expect(taskCard.locator('strong', { hasText: 'Overdue' })).toBeVisible();
+    await expect(taskCard.locator('strong').filter({ hasText: 'Overdue' })).toBeVisible();
 
     await todoPage.deleteTask(taskTitle);
     await expect(page.getByText('Task deleted successfully')).toBeVisible();

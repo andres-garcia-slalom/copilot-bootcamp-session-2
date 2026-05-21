@@ -164,35 +164,54 @@ describe('Tasks API integration', () => {
   });
 
   it('enforces API rate limits', async () => {
+    const rateLimitWindowMs = 60000;
+    const rateLimitThreshold = 2;
+    const rateLimitedApp = createApp(db, {
+      rateLimit: {
+        windowMs: rateLimitWindowMs,
+        limit: rateLimitThreshold,
+      },
+    });
+
     let lastResponse;
-    for (let attempt = 0; attempt < 301; attempt += 1) {
-      lastResponse = await request(app).get('/api/tasks');
+    for (let requestNumber = 0; requestNumber <= rateLimitThreshold; requestNumber += 1) {
+      lastResponse = await request(rateLimitedApp).get('/api/tasks');
     }
 
     expect(lastResponse.status).toBe(429);
   });
 
-  it('persists task data when re-opening the same database file', async () => {
+  it('persists task data when closing and reopening the same database file', async () => {
     const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'tasks-db-'));
     const dbPath = path.join(tempDir, 'tasks.db');
+    let firstDb;
+    let secondDb;
 
     try {
-      const firstDb = createDatabase(dbPath);
+      firstDb = createDatabase(dbPath);
       const firstApp = createApp(firstDb);
       const createResponse = await request(firstApp)
         .post('/api/tasks')
         .send({ title: 'Persist me', dueDate: '2099-01-01' });
       firstDb.close();
+      firstDb = null;
 
-      const secondDb = createDatabase(dbPath);
+      secondDb = createDatabase(dbPath);
       const secondApp = createApp(secondDb);
       const listResponse = await request(secondApp).get('/api/tasks');
       secondDb.close();
+      secondDb = null;
 
       expect(createResponse.status).toBe(201);
       expect(listResponse.status).toBe(200);
       expect(listResponse.body.some((task) => task.title === 'Persist me')).toBe(true);
     } finally {
+      if (firstDb) {
+        firstDb.close();
+      }
+      if (secondDb) {
+        secondDb.close();
+      }
       fs.rmSync(tempDir, { recursive: true, force: true });
     }
   });

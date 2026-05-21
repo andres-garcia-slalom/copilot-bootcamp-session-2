@@ -13,8 +13,9 @@ function validateTitle(title) {
   return typeof title === 'string' && title.trim().length > 0;
 }
 
-function createApp(db) {
+function createApp(db, options = {}) {
   const app = express();
+  const rateLimitConfig = options.rateLimit || {};
 
   app.use(cors());
   app.use(express.json());
@@ -22,8 +23,8 @@ function createApp(db) {
   app.use(
     '/api',
     rateLimit({
-      windowMs: 15 * 60 * 1000,
-      limit: 300,
+      windowMs: rateLimitConfig.windowMs || 15 * 60 * 1000,
+      limit: rateLimitConfig.limit || 300,
       standardHeaders: true,
       legacyHeaders: false,
     })

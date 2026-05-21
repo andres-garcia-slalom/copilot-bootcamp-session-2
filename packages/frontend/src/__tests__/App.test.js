@@ -154,27 +154,41 @@ function getTaskGroup(groupName) {
 
 describe('Task app', () => {
   it('renders tasks in the correct section with due date metadata', async () => {
-    render(<App />);
+    const formattedDateCalls = [];
+    const dateFormatSpy = jest.spyOn(Date.prototype, 'toLocaleDateString').mockImplementation(function mockFormat() {
+      formattedDateCalls.push(this.toISOString().slice(0, 10));
+      return 'formatted-date';
+    });
 
-    await waitFor(() => expect(screen.getByText('Pay rent')).toBeInTheDocument());
+    try {
+      render(<App />);
 
-    const incompleteGroup = getTaskGroup('Incomplete');
-    const completedGroup = getTaskGroup('Completed');
+      await waitFor(() => expect(screen.getByText('Pay rent')).toBeInTheDocument());
 
-    expect(incompleteGroup).not.toBeNull();
-    expect(completedGroup).not.toBeNull();
+      const incompleteGroup = getTaskGroup('Incomplete');
+      const completedGroup = getTaskGroup('Completed');
 
-    expect(within(incompleteGroup).getByText('Pay rent')).toBeInTheDocument();
-    expect(within(completedGroup).queryByText('Pay rent')).not.toBeInTheDocument();
+      expect(incompleteGroup).not.toBeNull();
+      expect(completedGroup).not.toBeNull();
 
-    expect(within(completedGroup).getByText('File taxes')).toBeInTheDocument();
-    expect(within(incompleteGroup).queryByText('File taxes')).not.toBeInTheDocument();
+      expect(within(incompleteGroup).getByText('Pay rent')).toBeInTheDocument();
+      expect(within(completedGroup).queryByText('Pay rent')).not.toBeInTheDocument();
 
-    expect(within(incompleteGroup).getByText('No due date')).toBeInTheDocument();
+      expect(within(completedGroup).getByText('File taxes')).toBeInTheDocument();
+      expect(within(incompleteGroup).queryByText('File taxes')).not.toBeInTheDocument();
 
-    const formattedDate = new Date('2099-12-01T00:00:00').toLocaleDateString();
-    expect(within(completedGroup).getByText(formattedDate)).toBeInTheDocument();
-    expect(within(incompleteGroup).getByText(/Overdue/i)).toBeInTheDocument();
+      const noDueDateTaskCard = within(incompleteGroup).getByText('Plan vacation').closest('.task-card');
+      expect(noDueDateTaskCard).not.toBeNull();
+      expect(within(noDueDateTaskCard).getByText('No due date')).toBeInTheDocument();
+
+      const completedTaskCard = within(completedGroup).getByText('File taxes').closest('.task-card');
+      expect(completedTaskCard).not.toBeNull();
+      expect(within(completedTaskCard).getByText('formatted-date')).toBeInTheDocument();
+      expect(formattedDateCalls).toContain('2099-12-01');
+      expect(within(incompleteGroup).getByText(/Overdue/i)).toBeInTheDocument();
+    } finally {
+      dateFormatSpy.mockRestore();
+    }
   });
 
   it('shows an error when loading tasks fails', async () => {
@@ -223,7 +237,7 @@ describe('Task app', () => {
         res(ctx.status(500), ctx.json({ error: 'Failed to update task' }))
       )
     );
-    render(<App />);
+    const { unmount } = render(<App />);
 
     await waitFor(() => expect(screen.getByText('Pay rent')).toBeInTheDocument());
 
@@ -236,8 +250,13 @@ describe('Task app', () => {
       expect(screen.getByText('Error saving task: Failed to update task')).toBeInTheDocument();
       expect(screen.getByRole('button', { name: 'Save task' })).toBeInTheDocument();
     });
+    unmount();
+    render(<App />);
 
-    expect(mockTasks.find((task) => task.id === 1).title).toBe('Pay rent');
+    await waitFor(() => {
+      expect(screen.getByText('Pay rent')).toBeInTheDocument();
+      expect(screen.queryByText('Pay rent updated')).not.toBeInTheDocument();
+    });
   });
 
   it('cancels edit and resets the form state', async () => {
@@ -267,7 +286,7 @@ describe('Task app', () => {
         res(ctx.status(500), ctx.json({ error: 'Failed to delete task' }))
       )
     );
-    render(<App />);
+    const { unmount } = render(<App />);
 
     await waitFor(() => expect(screen.getByText('Pay rent')).toBeInTheDocument());
     await user.click(screen.getAllByRole('button', { name: 'Delete' })[0]);
@@ -275,7 +294,11 @@ describe('Task app', () => {
     await waitFor(() => {
       expect(screen.getByText('Error deleting task: Failed to delete task')).toBeInTheDocument();
     });
+    unmount();
+    render(<App />);
 
-    expect(mockTasks.some((task) => task.title === 'Pay rent')).toBe(true);
+    await waitFor(() => {
+      expect(screen.getByText('Pay rent')).toBeInTheDocument();
+    });
   });
 });

@@ -50,10 +50,6 @@ class TodoPage {
     await this.page.getByRole('button', { name: 'Add task' }).click();
   }
 
-  async reload() {
-    await this.page.reload();
-  }
-
   async deleteTask(title) {
     const taskCard = this.page.locator('.task-card').filter({ hasText: title }).first();
     await taskCard.getByRole('button', { name: 'Delete' }).click();
