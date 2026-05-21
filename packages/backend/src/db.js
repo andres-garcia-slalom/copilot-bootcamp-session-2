@@ -51,7 +51,7 @@ function isTaskOverdue(row) {
   }
 
   const now = new Date();
-  const dueDate = new Date(`${row.due_date}T23:59:59.999Z`);
+  const dueDate = new Date(`${row.due_date}T23:59:59.999`);
   return dueDate < now;
 }
 

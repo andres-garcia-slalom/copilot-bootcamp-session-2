@@ -1,6 +1,7 @@
 const express = require('express');
 const cors = require('cors');
 const morgan = require('morgan');
+const rateLimit = require('express-rate-limit');
 const { createDatabase, mapTaskRow, toIsoDate } = require('./db');
 
 function parseTaskId(rawId) {
@@ -18,6 +19,15 @@ function createApp(db) {
   app.use(cors());
   app.use(express.json());
   app.use(morgan('dev'));
+  app.use(
+    '/api',
+    rateLimit({
+      windowMs: 15 * 60 * 1000,
+      limit: 300,
+      standardHeaders: true,
+      legacyHeaders: false,
+    })
+  );
 
   app.get('/', (req, res) => {
     res.status(200).json({ status: 'ok', message: 'Backend server is running' });
