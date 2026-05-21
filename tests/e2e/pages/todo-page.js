@@ -31,6 +31,29 @@ class TodoPage {
     await this.page.getByRole('button', { name: 'Mark complete' }).first().click();
   }
 
+  getTaskGroup(groupName) {
+    return this.page
+      .locator('.task-group')
+      .filter({ has: this.page.getByRole('heading', { name: groupName }) })
+      .first();
+  }
+
+  getTaskCard(groupName, title) {
+    return this.getTaskGroup(groupName).locator('.task-card').filter({ hasText: title }).first();
+  }
+
+  async toggleTaskComplete(title) {
+    await this.getTaskCard('Incomplete', title).getByRole('button', { name: 'Mark complete' }).click();
+  }
+
+  async clickAddTask() {
+    await this.page.getByRole('button', { name: 'Add task' }).click();
+  }
+
+  async reload() {
+    await this.page.reload();
+  }
+
   async deleteTask(title) {
     const taskCard = this.page.locator('.task-card').filter({ hasText: title }).first();
     await taskCard.getByRole('button', { name: 'Delete' }).click();
