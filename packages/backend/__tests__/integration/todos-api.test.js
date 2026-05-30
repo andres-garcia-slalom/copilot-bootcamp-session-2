@@ -1,4 +1,7 @@
 const request = require('supertest');
+const fs = require('fs');
+const os = require('os');
+const path = require('path');
 const { createApp } = require('../../src/app');
 const { createDatabase } = require('../../src/db');
 
@@ -51,6 +54,13 @@ describe('Tasks API integration', () => {
     expect(response.body).toEqual({ error: 'Task title is required' });
   });
 
+  it('rejects invalid due dates when creating a task', async () => {
+    const response = await createTask({ dueDate: 'not-a-real-date' });
+
+    expect(response.status).toBe(400);
+    expect(response.body).toEqual({ error: 'Due date must be a valid date' });
+  });
+
   it('lists tasks sorted by due date with undated tasks last', async () => {
     await createTask({ title: 'No due date', dueDate: null });
     await createTask({ title: 'Later', dueDate: '2099-03-01' });
@@ -88,6 +98,20 @@ describe('Tasks API integration', () => {
       completed: true,
       overdue: false,
     });
+  });
+
+  it('rejects invalid due dates when updating a task', async () => {
+    const createResponse = await createTask({ title: 'Needs update' });
+    const taskId = createResponse.body.id;
+
+    const updateResponse = await request(app)
+      .put(`/api/tasks/${taskId}`)
+      .send({
+        dueDate: 'invalid-date',
+      });
+
+    expect(updateResponse.status).toBe(400);
+    expect(updateResponse.body).toEqual({ error: 'Due date must be a valid date' });
   });
 
   it('supports marking tasks incomplete after completion', async () => {
@@ -137,5 +161,58 @@ describe('Tasks API integration', () => {
     const invalidDelete = await request(app).delete('/api/tasks/nope');
     expect(invalidDelete.status).toBe(400);
     expect(invalidDelete.body).toEqual({ error: 'Valid task ID is required' });
+  });
+
+  it('enforces API rate limits', async () => {
+    const rateLimitWindowMs = 60000;
+    const rateLimitThreshold = 2;
+    const rateLimitedApp = createApp(db, {
+      rateLimit: {
+        windowMs: rateLimitWindowMs,
+        limit: rateLimitThreshold,
+      },
+    });
+
+    let lastResponse;
+    for (let requestNumber = 0; requestNumber <= rateLimitThreshold; requestNumber += 1) {
+      lastResponse = await request(rateLimitedApp).get('/api/tasks');
+    }
+
+    expect(lastResponse.status).toBe(429);
+  });
+
+  it('persists task data when closing and reopening the same database file', async () => {
+    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'tasks-db-'));
+    const dbPath = path.join(tempDir, 'tasks.db');
+    let firstDb;
+    let secondDb;
+
+    try {
+      firstDb = createDatabase(dbPath);
+      const firstApp = createApp(firstDb);
+      const createResponse = await request(firstApp)
+        .post('/api/tasks')
+        .send({ title: 'Persist me', dueDate: '2099-01-01' });
+      firstDb.close();
+      firstDb = null;
+
+      secondDb = createDatabase(dbPath);
+      const secondApp = createApp(secondDb);
+      const listResponse = await request(secondApp).get('/api/tasks');
+      secondDb.close();
+      secondDb = null;
+
+      expect(createResponse.status).toBe(201);
+      expect(listResponse.status).toBe(200);
+      expect(listResponse.body.some((task) => task.title === 'Persist me')).toBe(true);
+    } finally {
+      if (firstDb) {
+        firstDb.close();
+      }
+      if (secondDb) {
+        secondDb.close();
+      }
+      fs.rmSync(tempDir, { recursive: true, force: true });
+    }
   });
 });
